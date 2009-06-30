@@ -9,7 +9,6 @@
 	
 	class FieldID3 extends FieldUpload {
 		protected $_driver = null;
-		public $_ignore = array();
 		
 	/*-------------------------------------------------------------------------
 		Definition:
@@ -141,6 +140,52 @@
 			return $input;			
 		}
 		
+		
+		
+		/**
+		*		Override parent::appendFormattedElement()
+		*/
+		function appendFormattedElement(&$wrapper, $data)
+		{
+			$item = new XMLElement($this->get('element_name'));
+			
+			$item->setAttributeArray(array(
+				'size' => General::formatFilesize(filesize(WORKSPACE . $data['file'])),
+			 	'path' => str_replace(WORKSPACE, NULL, dirname(WORKSPACE . $data['file'])),
+				'type' => $data['mimetype'],
+			));
+			
+			$item->appendChild(new XMLElement('filename', General::sanitize(basename($data['file']))));
+						
+			$m = unserialize($data['meta']);
+			
+			if(is_array($m) && !empty($m)){
+				$item->appendChild(new XMLElement('meta', NULL, $m));
+			}
+			
+			# ID3 data
+			$tags = new XMLElement("id3-tags");
+			$tags->setAttributeArray( 
+				array(
+					"duration"	=> $this->time_duration($data['duration'], NULL, true),
+					"year"			=> $data['year'],
+				)
+			);
+			$tags->appendChild(new XMLElement('title', $data['title']));
+			$tags->appendChild(new XMLElement('artist', $data['artist']));
+			$tags->appendChild(new XMLElement('album', $data['album']));
+			$tags->appendChild(new XMLElement('album-artist', $data['album_artist']));
+			$tags->appendChild(new XMLElement('genre', $data['genre']));
+			$tags->appendChild(new XMLElement('comments', $data['comments'],
+				array("word-count" => General::countWords($data['comments']))
+			));
+			$tags->appendChild(new XMLElement('lyrics', $data['lyrics'],
+				array("word-count" => General::countWords($data['lyrics']))
+			));	
+			$item->appendChild($tags);
+			$wrapper->appendChild($item);
+		}
+		
 		/*-------------------------------------------------------------------------
 			ID3 related:
 		-------------------------------------------------------------------------*/
@@ -197,5 +242,31 @@
 			} else {
 				return $tagwriter->errors;
 			}
+		}
+		
+		/*-------------------------------------------------------------------------
+			Helpers
+		-------------------------------------------------------------------------*/
+		/**
+		 * Return duration in seconds as hh:mm:ss format
+		 */
+		function time_duration($seconds)
+		{
+			# Define time periods
+			$periods = array (
+				'hours'     => 3600,
+				'minutes'   => 60,
+				'seconds'   => 1
+				);
+				
+			# Break into periods
+			$seconds = (float) $seconds;
+			foreach ($periods as $period => $value) {
+				$count = floor($seconds / $value);
+				$segments[] = ($count < 10) ? "0" . (string) $count : $count;
+				$seconds = $seconds % $value;
+			}
+	    $str = implode(':', $segments);
+	    return $str;
 		}
 	}
