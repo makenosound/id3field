@@ -67,77 +67,16 @@
 		*/
 		public function processRawFieldData($data, &$status, $simulate = false, $entry_id = NULL)
 		{
-			## Start: Pulled straight from field.upload.php
-			
-			$status = parent::__OK__;
-
-			## Its not an array, so just retain the current data and return
-			if(!is_array($data)){
-
-				$status = parent::__OK__;
-
-				# Do a simple reconstruction of the file meta information. This is a workaround for
-				# bug which causes all meta information to be dropped
-				return array(
-					'file' => $data,
-					'mimetype' => parent::__sniffMIMEType($data),
-					'size' => filesize(WORKSPACE . $data),
-					'meta' => serialize(parent::getMetaInfo(WORKSPACE . $data, parent::__sniffMIMEType($data)))
-				);
-
-			}
-
-			if($simulate) return;
-
-			if($data['error'] == UPLOAD_ERR_NO_FILE || $data['error'] != UPLOAD_ERR_OK) return;
-
-			## Sanitize the filename
-			$data['name'] = Lang::createFilename($data['name']);
-
-			## Upload the new file
-			$abs_path = DOCROOT . '/' . trim($this->get('destination'), '/');
-			$rel_path = str_replace('/workspace', '', $this->get('destination'));
-
-			if(!General::uploadFile($abs_path, $data['name'], $data['tmp_name'], $this->_engine->Configuration->get('write_mode', 'file'))){
-
-				$message = __('There was an error while trying to upload the file <code>%1$s</code> to the target directory <code>%2$s</code>.', array($data['name'], 'workspace/'.ltrim($rel_path, '/')));
-				$status = parent::__ERROR_CUSTOM__;
-				return;
-			}
-
-			if($entry_id){
-				$row = $this->Database->fetchRow(0, "SELECT * FROM `tbl_entries_data_".$this->get('id')."` WHERE `entry_id` = '$entry_id' LIMIT 1");
-				$existing_file = $abs_path . '/' . basename($row['file']);
-
-				General::deleteFile($existing_file);
-			}
-
-			$status = parent::__OK__;
-
-			$file = rtrim($rel_path, '/') . '/' . trim($data['name'], '/');
-
-			## If browser doesn't send MIME type (e.g. .flv in Safari)
-			if (strlen(trim($data['type'])) == 0){
-				$data['type'] = 'unknown';
-			}
-			## End: Pulled straight from field.upload.php
-			
+			$upload = parent::processRawFieldData($data, &$status, $simulate, $entry_id);
 			
 			## Figure out ID3
 			$id3_data = $this->retrieve_id3_data();
 			
 			## Write out ID3 information			
-			$this->write_id3_tags($id3_data, $file);
+			$this->write_id3_tags($id3_data, $data);
 			
-			$file_data = array(
-				'file' => $file,
-				'size' => $data['size'],
-				'mimetype' => $data['type'],
-				'meta' => serialize(parent::getMetaInfo(WORKSPACE . $file, $data['type'])),
-			);
-			
-			$input = array_merge($file_data, $id3_data);
-			return $input;			
+			$input = array_merge($upload, $id3_data);
+			return $input;
 		}
 		
 		
@@ -176,8 +115,8 @@
 			$tags->appendChild(new XMLElement('album', $data['album']));
 			$tags->appendChild(new XMLElement('album-artist', $data['album_artist']));
 			$tags->appendChild(new XMLElement('genre', $data['genre']));
-			$tags->appendChild(new XMLElement('comments', $data['comments'],
-				array("word-count" => General::countWords($data['comments']))
+			$tags->appendChild(new XMLElement('comment', $data['comment'],
+				array("word-count" => General::countWords($data['comment']))
 			));
 			$tags->appendChild(new XMLElement('lyrics', $data['lyrics'],
 				array("word-count" => General::countWords($data['lyrics']))
@@ -229,7 +168,6 @@
 				$item = array((string) $item); 
 			}
 			$tag_data['track'][]   = '04/16';
-			print_r($tag_data);
 			$writer->tag_data = $tag_data;
 			
 			# Need to get the duration and pass it back
