@@ -28,6 +28,14 @@
 				`field_id` int(11) unsigned NOT NULL,
 				`destination` varchar(255) NOT NULL,
 				`validator` varchar(50),
+				`title` varchar(255),
+				`artist` varchar(255),
+				`album` varchar(255),
+				`album_artist` varchar(255),
+				`comment` varchar(255),
+				`genre` varchar(255),
+				`lyrics` varchar(255),
+				`year` varchar(255),
 				PRIMARY KEY (`id`),
 				KEY `field_id` (`field_id`))"
 			);

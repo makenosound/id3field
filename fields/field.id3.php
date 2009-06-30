@@ -68,18 +68,17 @@
 		public function processRawFieldData($data, &$status, $simulate = false, $entry_id = NULL)
 		{
 			$upload = parent::processRawFieldData($data, &$status, $simulate, $entry_id);
-			
+			$filepath = $upload['file'];
 			## Figure out ID3
-			$id3_data = $this->retrieve_id3_data();
+			$id3_data = $this->sort_id3_data();
 			
-			## Write out ID3 information			
-			$this->write_id3_tags($id3_data, $data);
+			## Write out ID3 information
+			$duration = $this->write_id3_tags($id3_data, $filepath);
+			$id3_data['duration'] = $duration;
 			
 			$input = array_merge($upload, $id3_data);
 			return $input;
 		}
-		
-		
 		
 		/**
 		*		Override parent::appendFormattedElement()
@@ -113,7 +112,7 @@
 			$tags->appendChild(new XMLElement('title', $data['title']));
 			$tags->appendChild(new XMLElement('artist', $data['artist']));
 			$tags->appendChild(new XMLElement('album', $data['album']));
-			$tags->appendChild(new XMLElement('album-artist', $data['album_artist']));
+			$tags->appendChild(new XMLElement('album_artist', $data['album_artist']));
 			$tags->appendChild(new XMLElement('genre', $data['genre']));
 			$tags->appendChild(new XMLElement('comment', $data['comment'],
 				array("word-count" => General::countWords($data['comment']))
@@ -128,47 +127,45 @@
 		/*-------------------------------------------------------------------------
 			ID3 related:
 		-------------------------------------------------------------------------*/
-		private function retrieve_id3_data()
+		private function sort_id3_data()
 		{
 			return array(
-				'title'					=> "Hello",
-				'artist' 				=> "Artist",
+				'title'					=> "What up",
+				'artist' 				=> "Max Wheeler",
 				'album' 				=> "Album",
-				'album_artist'	=> "Album Artist",
-				'comment'			=> "Donec Aenean mi placerat metus ac ornare semper. magna eget, dui enim est.",
-				'genre'					=> "Podcast",
-				'lyrics'				=> "Facilisis sit feugiat Mauris facilisis.",
-				'year'					=> 2009,
-				'duration'			=> 3591,
+				'album_artist'	=> "National Museum of Australia",
+				'genre' 				=> "Podcast",
+				'year' 					=> 2009,
+				'comment'				=> "<p>Donec mi placerat metus ac ornare semper.</p> <p>Magna <strong>eget</strong>, dui enim est.</p>",
+				'lyrics'				=> "<p>Donec mi placerat metus ac ornare semper.</p> <p>Magna <strong>eget</strong>, dui enim est.</p>",
 			);
 		}
 		
-		private function write_id3_tags($tag_data, $file)
+		private function write_id3_tags($tags_to_write, $file)
 		{		
 			$format = 'UTF-8';
-			// Initialize getID3 engine
+			# Initialize getID3 engine
 			require_once(EXTENSIONS . '/id3field/lib/getid3/getid3.php');
 			$getID3 = new getID3;
-			$getID3->setOption(array('encoding'=>$format));
+			$getID3->setOption(array('encoding' => $format));
 
-			// Initialize getID3 tag-writing module
+			# Initialize getID3 tag-writing module
 			require_once(EXTENSIONS . '/id3field/lib/getid3/write.php');
 			$writer = new getid3_writetags;
-#			$writer->filename       = '/path/to/file.mp3';			
-			$writer->filename       = WORKSPACE . $file;
-			$writer->tagformats     = array('id3v1', 'id3v2.3');
+			$writer->filename		= WORKSPACE . $file;
+			$writer->tagformats	= array('id3v1', 'id3v2.3');
 
 			# Options (optional)
-			$writer->overwrite_tags = true;
-			$writer->tag_encoding   = $format;
+			$writer->overwrite_tags		 = true;
+			$writer->tag_encoding 		 = $format;
 			$writer->remove_other_tags = true;
 
-			foreach ($tag_data as &$item)
+			foreach ($tags_to_write as $key => $item)
 			{
-				$item = array((string) $item); 
+				if($key == "lyrics" OR $key == "comment") $item = strip_tags($item);
+				$data[strtoupper($key)] = array((string) $item);
 			}
-			$tag_data['track'][]   = '04/16';
-			$writer->tag_data = $tag_data;
+			$writer->tag_data = $data;
 			
 			# Need to get the duration and pass it back
 			
@@ -176,7 +173,7 @@
 			if ($writer->WriteTags())
 			{
 				# $tagwriter->warnings
-				return true; # Should return duration as well
+				return floor($writer->ThisFileInfo['playtime_seconds']);
 			} else {
 				return $tagwriter->errors;
 			}
@@ -204,7 +201,111 @@
 				$segments[] = ($count < 10) ? "0" . (string) $count : $count;
 				$seconds = $seconds % $value;
 			}
-	    $str = implode(':', $segments);
-	    return $str;
+			$str = implode(':', $segments);
+			return $str;
+		}
+		
+		
+		/*-------------------------------------------------------------------------
+			Setting Panel
+		-------------------------------------------------------------------------*/
+		
+		/**
+		*		Override parent::displaySettingsPanel()
+		*/
+		public function displaySettingsPanel(&$wrapper, $errors = null)
+		{
+			parent::displaySettingsPanel($wrapper, $errors);
+			
+			$order = $this->get('sortorder');
+			
+			$wrapper->appendChild(new XMLElement("h5", "ID3 tags"));
+			
+			$div = new XMLElement('div');
+			$div->setAttribute('class', 'group');
+			
+			# Title
+			$label = new XMLElement("label", "Title");
+			$label->appendChild(Widget::Input("fields[$order][title]", $this->get('title'), 'text'));
+			$div->appendChild($label);
+			
+			# Artist
+			$label = new XMLElement("label", "Artist");
+			$label->appendChild(Widget::Input("fields[$order][artist]", $this->get('artist'), 'text'));
+			$div->appendChild($label);
+			
+			$wrapper->appendChild($div);
+			
+			$div = new XMLElement('div');
+			$div->setAttribute('class', 'group');
+			
+			# Album
+			$label = new XMLElement("label", "Album");
+			$label->appendChild(Widget::Input("fields[$order][album]", $this->get('album'), 'text'));
+			$div->appendChild($label);
+			
+			# Album Artist
+			$label = new XMLElement("label", "Album Artist");
+			$label->appendChild(Widget::Input("fields[$order][album_artist]", $this->get('album_artist'), 'text'));
+			$div->appendChild($label);
+			
+			$wrapper->appendChild($div);
+			
+			$div = new XMLElement('div');
+			$div->setAttribute('class', 'group');
+			
+			# Year
+			$label = new XMLElement("label", "Year");
+			$label->appendChild(Widget::Input("fields[$order][year]", $this->get('year'), 'text'));
+			$div->appendChild($label);
+			
+			# Genre
+			$label = new XMLElement("label", "Genre");
+			$label->appendChild(Widget::Input("fields[$order][genre]", $this->get('genre'), 'text'));
+			$div->appendChild($label);
+			
+			$wrapper->appendChild($div);
+			
+			$div = new XMLElement('div');
+			$div->setAttribute('class', 'group');
+			
+			# Album
+			$label = new XMLElement("label", "Lyrics");
+			$label->appendChild(Widget::Input("fields[$order][lyrics]", $this->get('lyrics'), 'text'));
+			$div->appendChild($label);
+			
+			# Album Artist
+			$label = new XMLElement("label", "Comment");
+			$label->appendChild(Widget::Input("fields[$order][comment]", $this->get('comment'), 'text'));
+			$div->appendChild($label);
+			
+			$wrapper->appendChild($div);
+		}
+		
+		
+		public function commit()
+		{
+			if(!parent::commit()) return false;
+
+			$id = $this->get('id');
+
+			if($id === false) return false;
+
+			$fields = array();
+
+			$fields['field_id'] = $id;
+			$fields['destination'] = $this->get('destination');
+			$fields['validator'] = ($fields['validator'] == 'custom' ? NULL : $this->get('validator'));
+			$fields['title'] = $this->get('title');
+			$fields['artist'] = $this->get('artist');
+			$fields['album'] = $this->get('album');
+			$fields['album_artist'] = $this->get('album_artist');
+			$fields['year'] = $this->get('year');
+			$fields['genre'] = $this->get('genre');
+			$fields['lyrics'] = $this->get('lyrics');
+			$fields['comment'] = $this->get('comment');
+
+			$this->_engine->Database->query("DELETE FROM `tbl_fields_".$this->handle()."` WHERE `field_id` = '$id' LIMIT 1");		
+			return $this->_engine->Database->insert($fields, 'tbl_fields_' . $this->handle());
 		}
 	}
