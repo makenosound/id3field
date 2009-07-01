@@ -36,6 +36,7 @@
 				`genre` varchar(255),
 				`lyrics` varchar(255),
 				`year` varchar(255),
+				`filename` varchar(255),
 				PRIMARY KEY (`id`),
 				KEY `field_id` (`field_id`))"
 			);

@@ -61,25 +61,6 @@
 			");
 		}
 		
-		
-		/**
-		*		Override parent::createTable()
-		*/
-		public function processRawFieldData($data, &$status, $simulate = false, $entry_id = NULL)
-		{
-			$upload = parent::processRawFieldData($data, &$status, $simulate, $entry_id);
-			$filepath = $upload['file'];
-			## Figure out ID3
-			$id3_data = $this->sort_id3_data();
-			
-			## Write out ID3 information
-			$duration = $this->write_id3_tags($id3_data, $filepath);
-			$id3_data['duration'] = $duration;
-			
-			$input = array_merge($upload, $id3_data);
-			return $input;
-		}
-		
 		/**
 		*		Override parent::appendFormattedElement()
 		*/
@@ -124,21 +105,77 @@
 			$wrapper->appendChild($item);
 		}
 		
+		
+		/**
+		*		Override parent::processRawFieldData()
+		*/
+		public function processRawFieldData($data, &$status, $simulate = false, $entry_id = NULL)
+		{	
+			## Figure out ID3
+			$id3_data = $this->sort_id3_data();
+			if (is_array($data) AND isset($data['name']) AND isset($id3_data['filename']))
+			{
+				$data['name'] = Lang::createFilename($id3_data['filename']) . "." . end(explode(".", $data['name']));
+			}
+			unset($id3_data['filename']);
+		
+			$upload = parent::processRawFieldData($data, &$status, $simulate, $entry_id);
+			$filepath = $upload['file'];
+			
+			## Write out ID3 information
+			$duration = $this->write_id3_tags($id3_data, $filepath);
+			$id3_data['duration'] = $duration;
+			
+			$input = array_merge($upload, $id3_data);
+			return $input;
+		}
+		
+		
 		/*-------------------------------------------------------------------------
 			ID3 related:
 		-------------------------------------------------------------------------*/
 		private function sort_id3_data()
 		{
-			return array(
-				'title'					=> "What up",
-				'artist' 				=> "Max Wheeler",
-				'album' 				=> "Album",
-				'album_artist'	=> "National Museum of Australia",
-				'genre' 				=> "Podcast",
-				'year' 					=> 2009,
-				'comment'				=> "<p>Donec mi placerat metus ac ornare semper.</p> <p>Magna <strong>eget</strong>, dui enim est.</p>",
-				'lyrics'				=> "<p>Donec mi placerat metus ac ornare semper.</p> <p>Magna <strong>eget</strong>, dui enim est.</p>",
+			$id3_fields = array(
+				'title',
+				'artist',
+				'album',
+				'album_artist',
+				'genre',
+				'year',
+				'comment',
+				'lyrics',
+				'filename',
 			);
+			$rules = $this->get();
+			$fields = $_POST['fields'];
+
+			foreach ($rules as $key => $rule)
+			{
+				if ( ! in_array($key, $id3_fields))
+				{
+					unset($rules[$key]);
+					continue;
+				}
+				$content = $rules[$key];
+				$replacements = array();
+
+				# Find queries:
+				preg_match_all('/\{[^\}]+\}/', $rule, $matches);
+				foreach($matches[0] as $match)
+				{
+					$replacements[$match] = $fields[trim($match, '{}')];
+				}
+				if ( ! isset($replacements[$match])) $replacements[$match] = $rule;
+				$content = str_replace(
+					array_keys($replacements),
+					array_values($replacements),
+					$content
+				);
+				$rules[$key] = $content;
+			}
+			
+			return $rules;
 		}
 		
 		private function write_id3_tags($tags_to_write, $file)
@@ -280,9 +317,16 @@
 			$div->appendChild($label);
 			
 			$wrapper->appendChild($div);
+			
+			# Filename
+			$label = new XMLElement("label", "File Name");
+			$label->appendChild(Widget::Input("fields[$order][filename]", $this->get('filename'), 'text'));
+			$wrapper->appendChild($label);
 		}
 		
-		
+		/**
+		*		Override parent::commit()
+		*/
 		public function commit()
 		{
 			if(!parent::commit()) return false;
@@ -304,6 +348,7 @@
 			$fields['genre'] = $this->get('genre');
 			$fields['lyrics'] = $this->get('lyrics');
 			$fields['comment'] = $this->get('comment');
+			$fields['filename'] = $this->get('filename');
 
 			$this->_engine->Database->query("DELETE FROM `tbl_fields_".$this->handle()."` WHERE `field_id` = '$id' LIMIT 1");		
 			return $this->_engine->Database->insert($fields, 'tbl_fields_' . $this->handle());
