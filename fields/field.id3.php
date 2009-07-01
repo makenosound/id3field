@@ -1,7 +1,4 @@
 <?php
-
-	ini_set("display_errors","2");
-	ERROR_REPORTING(E_ALL);
 	
 	if (!defined('__IN_SYMPHONY__')) die('<h2>Symphony Error</h2><p>You cannot directly access this file</p>');
 	
